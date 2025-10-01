@@ -1,6 +1,7 @@
+const config = require("./config.json")
 const blessed = require("blessed");
-const instance = "https://shoot.doesnm.cc/api";
-const token = "";
+const instance = config.instance;
+const token = config.token;
 
 function splitLongStringToArray(inputString, maxLength = 48) {
     const words = inputString.split(' '); // Split the string into words
@@ -115,15 +116,15 @@ channelsList.on("select", data => {
     c = selectedGuild.channels.find(c => c.name == data);
 ws.send(JSON.stringify({
      t: "members",
-     channel_id: `${c.id}@${c.domain}`,
+     channel_id: c.mention,
      range: [0,100]
    }))
   }
-   activeChannel = `${c.id}@${c.domain}`
-   
+   activeChannel = c.mention
+
    if(!c.messages){
      c.messages = [];
-     fetch(`${instance}/channel/${c.id}@${c.domain}/messages`, {
+     fetch(`${instance}/channel/${c.mention}/messages`, {
        headers: {
          'Authorization': token
        }
@@ -133,7 +134,7 @@ ws.send(JSON.stringify({
        messagesBox.addItem(`Messages in #${c.name}`)
        c.messages.forEach(m =>
        splitLongStringToArray(`${m.author_id.split("@")[0]}: ${m.content}`).forEach(e => messagesBox.addItem(e)))
-       
+
        messagesBox.select(messagesBox.items.length)
        screen.render();
      })
@@ -144,7 +145,7 @@ c.messages.forEach(m =>
        splitLongStringToArray(`${m.author_id.split("@")[0]}: ${m.content}`).forEach(e => messagesBox.addItem(e)))
        messagesBox.select(messagesBox.items.length)
        screen.render();
-       
+
    }
 })
 const messagesBox = blessed.list({
@@ -196,7 +197,6 @@ const messagebox = blessed.textbox({
   }
 });
 
-//form.append(messagebox)
 const readAndSend =() => {
     if(!activeChannel) return;
     fetch(`${instance}/channel/${activeChannel}/messages`, {
@@ -262,7 +262,7 @@ ws.addEventListener("message", msg => {
   const pack = JSON.parse(msg.data);
   seq++;
   if(pack.t == "READY"){
-    messagesBox.addItem(`${pack.d.user.name}@${pack.d.user.domain} is ready`)
+    messagesBox.addItem(`${pack.d.user.name} is ready`)
     guilds = pack.d.guilds;
     guildsList.addItem("Private")
     guilds.forEach(g => {
@@ -279,13 +279,11 @@ ws.addEventListener("message", msg => {
     screen.render();
   }else if(pack.t == "MESSAGE_CREATE"){
     const content = pack.d.message.content;
-    //console.log(pack.d.message.author_id, content)
-    //messagesBox.addItem(`${pack.d.message.author_id}: ${content}`)
 
 if(guildsList.getItem(guildsList.selected).getText() == "Private"){
-  const c = dms.find(d => d.id == pack.d.message.channel_id.split("@")[0])
+  const c = dms.find(d => d.mention == pack.d.message.channel_id)
   if(c){
-if(c.id == activeChannel.split("@")[0]){
+if(c.mention == activeChannel){
 splitLongStringToArray(`${pack.d.message.author_id.split("@")[0]}: ${content}`).forEach(e => messagesBox.addItem(e))
          }
          if(!c.messages) return;
@@ -295,10 +293,9 @@ splitLongStringToArray(`${pack.d.message.author_id.split("@")[0]}: ${content}`).
   }
 }else{
      guilds.forEach(g => {
-       const c = g.channels.find(c => c.id == pack.d.message.channel_id.split("@")[0])
-       //messagesBox.addItem(pack.d.message.channel_id)
+       const c = g.channels.find(c => c.mention == pack.d.message.channel_id)
        if(c){
-         if(c.id == activeChannel.split("@")[0]){
+         if(c.mention == activeChannel){
 splitLongStringToArray(`${pack.d.message.author_id.split("@")[0]}: ${content}`).forEach(e => messagesBox.addItem(e))
          }
          if(!c.messages) return;
