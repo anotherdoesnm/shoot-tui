@@ -1,0 +1,13 @@
+{
+  "name": "shoot-js-sdk",
+  "version": "1.0.0",
+  "description": "Javascript SDK for making clients and bots for Shoot fediverse messenger",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GLTWS",
+  "type": "commonjs"
+}

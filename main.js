@@ -1,30 +1,23 @@
 const config = require("./config.json")
+const Client = require("./sdk");
 const blessed = require("blessed");
-const instance = config.instance;
-const token = config.token;
-
+const client = new Client(config.instance);
+const util = require("util");
 function splitLongStringToArray(inputString, maxLength = 48) {
-    const words = inputString.split(' '); // Split the string into words
+    const words = inputString.split(' ');
     const result = [];
     let currentLine = '';
-
     words.forEach(word => {
-        // Check if adding the next word would exceed the max length
         if (currentLine.length + word.length + 1 > maxLength) {
-            // If it does, add the current line to the result and start a new line
             result.push(currentLine.trim());
-            currentLine = word + ' '; // Start a new line with the current word
+            currentLine = word + ' ';
         } else {
-            // If it doesn't, add the word to the current line
             currentLine += word + ' ';
         }
     });
-
-    // Add any remaining text in the current line to the result
     if (currentLine) {
         result.push(currentLine.trim());
     }
-
     return result;
 }
 
@@ -32,11 +25,9 @@ let activeChannel = null;
 const screen = blessed.screen({
   smartCSR: true
 })
-const guildsList = blessed.list({
-  height: '100%',
-  width: '15%',
+const style = {
   border: {
-    type: 'line'
+    type: 'line',
   },
   tags: true,
   keys: true,
@@ -44,177 +35,78 @@ const guildsList = blessed.list({
     border: {
       fg: 'grey'
     },
+    focus: {
+      fg: 'white'
+    },
     selected: {
       bg: 'white',
       fg: 'black'
-    },
-    focus: {
-      border: {
-        fg: 'white'
-      }
     }
   }
-})
-guildsList.on("select", data => {
+}
+const channelsList = blessed.list({
+  height: '100%',
+  width: '15%',
+  ...style
+});
+channelsList.on("select", async data => {
   data = data.getText();
-  channelsList.clearItems();
-  if(data == "Private"){
-    dms.forEach(d => channelsList.add(d.name))
-    screen.render()
-    return;
-  }
-  guilds.find(g => g.name == data).channels.forEach(c => {
-    channelsList.addItem(c.name)
+  if(!data.startsWith("#")) return;
+  const messages = await client.fetchMessages(client.index[channelsList.getItemIndex(data)]);
+  activeChannel = client.index[channelsList.getItemIndex(data)]
+  messagesBox.setContent('');
+  messages.forEach(m => {
+    splitLongStringToArray(m.content).forEach(c => messagesBox.add(`${m.author_id}: ${c}`))
   })
   screen.render();
 })
-guildsList.key('right', () => {
-  channelsList.focus();
-  screen.render();
+client.on("MESSAGE_CREATE", m => {
+  m = m.message;
+  if(activeChannel == m.channel_id){
+    splitLongStringToArray(m.content).forEach(c => messagesBox.add(`${m.author_id}: ${c}`))
+  }
 })
-
-const channelsList = blessed.list({
+screen.key("escape", () => {
+  process.exit(0);
+})
+const messagesBox = blessed.log({
   left: '15%',
-  height: '100%',
-  width: '15%',
-  border: {
-    type: 'line'
-  },
-  tags: true,
-  keys: true,
-  style: {
-    border: {
-      fg: 'grey'
-    },
-    focus: {
-      border: {
-        fg: 'white'
-      }
-    },
-    selected: {
-      bg: 'white',
-      fg: 'black'
-    }
-  }
-});
-channelsList.key('left', () => {
-  guildsList.focus();
-  screen.render();
-})
-channelsList.on("select", data => {
-  data = data.getText();
-  let c;
-  if(guildsList.getItem(guildsList.selected).getText() == "Private"){
-    c = dms.find(f => f.name == data)
-    membersBox.clearItems()
-    c.recipients.forEach(r => {
-      membersBox.addItem(r.split("@")[0])
-    })
-  }else{
-  const selectedGuildName = guildsList.getItem(guildsList.selected).getText(); // Get the text of the selected guild
-  const selectedGuild = guilds.find(g => g.name === selectedGuildName);
-    c = selectedGuild.channels.find(c => c.name == data);
-ws.send(JSON.stringify({
-     t: "members",
-     channel_id: c.mention,
-     range: [0,100]
-   }))
-  }
-   activeChannel = c.mention
-
-   if(!c.messages){
-     c.messages = [];
-     fetch(`${instance}/channel/${c.mention}/messages`, {
-       headers: {
-         'Authorization': token
-       }
-     }).then(r => r.json()).then(json => {
-       c.messages = json.reverse();
-       messagesBox.clearItems()
-       messagesBox.addItem(`Messages in #${c.name}`)
-       c.messages.forEach(m =>
-       splitLongStringToArray(`${m.author_id.split("@")[0]}: ${m.content}`).forEach(e => messagesBox.addItem(e)))
-
-       messagesBox.select(messagesBox.items.length)
-       screen.render();
-     })
-   }else{
-       messagesBox.clearItems()
-       messagesBox.addItem(`Messages in #${c.name}`)
-c.messages.forEach(m =>
-       splitLongStringToArray(`${m.author_id.split("@")[0]}: ${m.content}`).forEach(e => messagesBox.addItem(e)))
-       messagesBox.select(messagesBox.items.length)
-       screen.render();
-
-   }
-})
-const messagesBox = blessed.list({
-  left: '30%',
   height: '98%',
-  width: '55%',
-  border: {
-    type: 'line'
-  },
-  tags: true,
-  keys: true,
-  style: {
-    border: {
-      fg: 'grey'
-    },
-    focus: {
-      border: {
-        fg: 'white'
-      }
-    },
-    selected: {
-      bg: 'white',
-      fg: 'black'
-    }
-  },
-  alwaysScroll: true
+  width: '65%',
+  ...style,
 })
 
 const messagebox = blessed.textbox({
-  //inputOnFocus: true,
   height: '6%', 
-  width: '55%',
-  left: '30%',
+  width: '65%',
+  left: '15%',
   top: '95%',
-  border: {
-    type: 'line'
-  },
-  style: {
-    border: {
-      fg: 'grey'
-    },
-    focus: {
-      border: {
-        fg: 'white'
-      }
-    },
-    fg: 'white',
-    bg: 'black'
-  }
+  ...style
 });
-
-const readAndSend =() => {
-    if(!activeChannel) return;
-    fetch(`${instance}/channel/${activeChannel}/messages`, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token
-      },
-      body: JSON.stringify({
-        content: messagebox.getValue()
-      })
-    }).then()
-    messagebox.clearValue()
-    screen.render()
-  }
+client.index = [];
+client.on("ready", () => {
+  channelsList.add("Private");
+  client.index.push("Private");
+  client.channels.forEach(c => {
+    channelsList.add("#" + c.name);
+    client.index.push(c.mention);
+  })
+  client.guilds.forEach(g => {
+    client.index.push(g.name);
+    channelsList.add(g.name);
+    g.channels.forEach(c => {
+    channelsList.add("#" + c.name)
+    client.index.push(c.mention);
+    })
+  })
+  screen.render();
+})
 channelsList.key('right', () => {
   messagebox.focus()
-  messagebox.readInput(readAndSend)
+  messagebox.readInput(() => {
+    client.sendTextMessage(activeChannel,messagebox.getValue());
+      messagebox.clearValue();
+  })
 })
 messagebox.key('left', ()=>{
   channelsList.focus();
@@ -224,116 +116,11 @@ const membersBox = blessed.list({
   left: '85%',
   height: '100%',
   width: '15%',
-  border: {
-    type: 'line'
-  },
-  tags: true,
-  style: {
-    border: {
-      fg: 'grey'
-    },
-  }
+  ...style
 })
-screen.append(guildsList)
 screen.append(channelsList)
 screen.append(messagesBox);
 screen.append(membersBox);
 screen.append(messagebox);
-guildsList.focus();
-
-
-
-let seq = 0;
-let guilds = [];
-let dms = [];
-let relationships = [];
-const ws = new WebSocket(`${instance}`);
-ws.addEventListener("open", () => {
-  ws.send(JSON.stringify({
-    t: "identify",
-    token: token
-  }))
-})
-screen.key(['escape', 'C-c'], function(ch, key) {
-    ws.close()
-});
-ws.addEventListener("message", msg => {
-  //console.log(msg.data)
-  const pack = JSON.parse(msg.data);
-  seq++;
-  if(pack.t == "READY"){
-    messagesBox.addItem(`${pack.d.user.name} is ready`)
-    guilds = pack.d.guilds;
-    guildsList.addItem("Private")
-    guilds.forEach(g => {
-      guildsList.addItem(g.name)
-    })
-    dms = pack.d.channels;
-    relationships = pack.d.relationships;
-    setInterval(() => {
-      ws.send(JSON.stringify({
-        t: "heartbeat",
-        s: seq
-      }))
-    },8000)
-    screen.render();
-  }else if(pack.t == "MESSAGE_CREATE"){
-    const content = pack.d.message.content;
-
-if(guildsList.getItem(guildsList.selected).getText() == "Private"){
-  const c = dms.find(d => d.mention == pack.d.message.channel_id)
-  if(c){
-if(c.mention == activeChannel){
-splitLongStringToArray(`${pack.d.message.author_id.split("@")[0]}: ${content}`).forEach(e => messagesBox.addItem(e))
-         }
-         if(!c.messages) return;
-         c.messages.push(pack.d.message)
-         messagesBox.select(messagesBox.items.length)
-         screen.render()
-  }
-}else{
-     guilds.forEach(g => {
-       const c = g.channels.find(c => c.mention == pack.d.message.channel_id)
-       if(c){
-         if(c.mention == activeChannel){
-splitLongStringToArray(`${pack.d.message.author_id.split("@")[0]}: ${content}`).forEach(e => messagesBox.addItem(e))
-         }
-         if(!c.messages) return;
-         c.messages.push(pack.d.message)
-         messagesBox.select(messagesBox.items.length)
-         screen.render()
-       }
-     })
-  }
-       screen.render();
-    if(content.startsWith('!ping')){
-      fetch(`${instance}/channel/${pack.d.message.channel_id}/messages`, {
-        method: "POST",
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token
-        },
-        body: JSON.stringify({
-          content: "Pong!"
-        })
-      })
-    }
-  }else if(pack.t == "MEMBERS_CHUNK"){
-    membersBox.clearItems()
-    pack.d.items.forEach(e => {
-      if(typeof e == 'string'){
-        // TODO: handle role
-      }else{
-        membersBox.addItem(e.name)
-      }
-    })
-  }else{
-    //console.log(pack)
-  }
-});
-ws.addEventListener("error",e=>{
-  console.error(e);
-})
-ws.addEventListener("close", e => {
-  process.exit(0)
-})
+client.login(config.token);
+screen.render();
