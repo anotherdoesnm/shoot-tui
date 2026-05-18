@@ -16,9 +16,8 @@ ui.channelsList.on("select", async (item, index) => {
     const messages = await client.fetchMessages(channel.id);
     
     let actualMessages = [];
-    if (Array.isArray(messages)) {
-      actualMessages = messages;
-    } else if (messages && Array.isArray(messages.messages)) {
+    // API: /channel/{channel_id}/messages returns MessagesResponse
+    if (messages && Array.isArray(messages.messages)) {
       actualMessages = messages.messages;
     }
 
